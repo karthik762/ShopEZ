@@ -9,6 +9,13 @@ const orderRoutes = require("./routes/orderRoutes");
 
 dotenv.config();
 
+console.log("DEBUG: MONGO_URI env variable exists:", !!process.env.MONGO_URI);
+if (process.env.MONGO_URI) {
+  console.log("DEBUG: MONGO_URI starts with:", process.env.MONGO_URI.substring(0, 20));
+} else {
+  console.log("DEBUG: MONGO_URI is UNDEFINED!");
+}
+
 const app = express();
 
 app.use(cors());

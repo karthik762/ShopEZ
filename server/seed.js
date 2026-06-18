@@ -2,10 +2,14 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const User = require("./models/User");
 const Product = require("./models/Product");
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 const seedDB = async () => {
   try {
-    await mongoose.connect("mongodb://127.0.0.1:27017/shopez");
+    const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/shopez";
+    await mongoose.connect(mongoURI);
     console.log("Connected to MongoDB for seeding...");
 
     

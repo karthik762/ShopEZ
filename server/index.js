@@ -32,8 +32,12 @@ app.use("/api/products", productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/orders", orderRoutes);
 
+mongoose.set('bufferCommands', false);
+
 mongoose
-  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/shopez")
+  .connect(process.env.MONGO_URI || "mongodb://127.0.0.1:27017/shopez", {
+    bufferCommands: false
+  })
   .then(() => {
     console.log("MongoDB Connected");
     console.log("Database Name:", mongoose.connection.name);

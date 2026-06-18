@@ -347,6 +347,8 @@ function Products() {
           "Fashion",
           "Sports",
           "Books",
+          "Accessories",
+          "Home & Kitchen",
         ].map((cat) => (
           <button
             key={cat}

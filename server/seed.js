@@ -3,6 +3,9 @@ const bcrypt = require("bcryptjs");
 const User = require("./models/User");
 const Product = require("./models/Product");
 const dotenv = require("dotenv");
+const dns = require("dns");
+
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
 dotenv.config();
 

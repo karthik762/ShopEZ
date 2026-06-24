@@ -1,28 +1,9 @@
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
-const Product = require("../models/Product");
 
 const createOrder = async (req, res) => {
   try {
-    const { userId, products, totalAmount, shippingAddress, clearCart } = req.body;
-
-    // Verify stock for all products in the order first
-    for (const item of products) {
-      const dbProduct = await Product.findById(item.productId);
-      if (!dbProduct) {
-        return res.status(404).json({ message: `Product not found` });
-      }
-      if (dbProduct.stock < item.quantity) {
-        return res.status(400).json({ message: `Not enough stock for ${dbProduct.name}. Only ${dbProduct.stock} left.` });
-      }
-    }
-
-    // Decrement stock
-    for (const item of products) {
-      await Product.findByIdAndUpdate(item.productId, {
-        $inc: { stock: -item.quantity }
-      });
-    }
+    const { userId, products, totalAmount, shippingAddress } = req.body;
 
     const order = await Order.create({
       userId,
@@ -31,13 +12,11 @@ const createOrder = async (req, res) => {
       shippingAddress,
     });
 
-    // clear the user's cart once order is placed, unless clearCart is false
-    if (clearCart !== false) {
-      await Cart.findOneAndUpdate(
-        { userId },
-        { $set: { products: [] } }
-      );
-    }
+    
+    await Cart.findOneAndUpdate(
+      { userId },
+      { $set: { products: [] } }
+    );
 
     res.status(201).json({
       message: "Order placed successfully",

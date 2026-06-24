@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { API_URL } from "../config";
+import AdminHeader from "../components/AdminHeader";
+import { useToast } from "../components/Toast";
 
 function AdminProducts() {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const { showToast } = useToast();
 
   const [formData, setFormData] = useState({
     name: "",
@@ -27,14 +30,29 @@ function AdminProducts() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/admin/settings");
+      if (res.data && res.data.categories) {
+        setCategories(res.data.categories);
+        if (res.data.categories.length > 0) {
+          setFormData((prev) => ({
+            ...prev,
+            category: prev.category || res.data.categories[0],
+          }));
+        }
+      }
+    } catch (error) {
+      console.log("Failed to load categories:", error);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
-      const res = await axios.get(
-        `${API_URL}/api/products`
-      );
-
+      const res = await axios.get("http://localhost:5000/api/products");
       setProducts(res.data);
     } catch (error) {
       console.log(error);
@@ -51,329 +69,474 @@ function AdminProducts() {
   const handleAddProduct = async (e) => {
     e.preventDefault();
 
+    if (!formData.name || !formData.price || !formData.stock) {
+      showToast("Please fill in Name, Price, and Stock", "error");
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
+      await axios.post("http://localhost:5000/api/products", formData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      const formattedCategory = typeof formData.category === 'string'
-        ? formData.category.split(",").map(c => c.trim()).filter(Boolean)
-        : formData.category;
-
-      await axios.post(
-        `${API_URL}/api/products`,
-        { ...formData, category: formattedCategory },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      window.showToast("Product Added successfully!", "success");
+      showToast("Product successfully added!", "success");
 
       setFormData({
         name: "",
         description: "",
         price: "",
         image: "",
-        category: "",
+        category: categories[0] || "",
         stock: "",
       });
 
       fetchProducts();
     } catch (error) {
       console.log(error);
-      window.showToast("Failed to Add Product", "error");
+      showToast("Failed to add product.", "error");
     }
   };
 
   const deleteProduct = async (id) => {
-
-    if ( !window.confirm(
-    "Are you sure you want to delete this product?"
-  )
-)
-  return;
+    if (!window.confirm("Are you sure you want to delete this product?")) {
+      return;
+    }
 
     try {
       const token = localStorage.getItem("token");
+      await axios.delete(`http://localhost:5000/api/products/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      await axios.delete(
-        `${API_URL}/api/products/${id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      window.showToast("Product Deleted successfully!", "success");
-
+      showToast("Product deleted successfully.", "success");
       fetchProducts();
     } catch (error) {
       console.log(error);
+      showToast("Failed to delete product.", "error");
     }
   };
 
   const editProduct = (product) => {
     setEditingId(product._id);
-
     setEditData({
       name: product.name,
       description: product.description,
       price: product.price,
       image: product.image,
-      category: Array.isArray(product.category) ? product.category.join(", ") : product.category,
+      category: product.category,
       stock: product.stock,
     });
   };
 
+  const cancelEdit = () => {
+    setEditingId(null);
+  };
+
   const saveProduct = async () => {
+    if (!editData.name || !editData.price || !editData.stock) {
+      showToast("Required fields cannot be empty", "error");
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
+      await axios.put(`http://localhost:5000/api/products/${editingId}`, editData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      const formattedCategory = typeof editData.category === 'string'
-        ? editData.category.split(",").map(c => c.trim()).filter(Boolean)
-        : editData.category;
-
-      await axios.put(
-        `${API_URL}/api/products/${editingId}`,
-        { ...editData, category: formattedCategory },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      window.showToast("Product Updated successfully!", "success");
-
+      showToast("Product updated successfully!", "success");
       setEditingId(null);
-
       fetchProducts();
     } catch (error) {
       console.log(error);
-      window.showToast("Update Failed", "error");
+      showToast("Failed to update product.", "error");
     }
   };
 
   return (
-    <div style={{ padding: "40px 20px", maxWidth: "800px", margin: "0 auto", textAlign: "left" }}>
-      <h1 style={{ fontFamily: "var(--heading)", fontSize: "42px", color: "var(--text-h)", marginBottom: "35px" }}>
-        Manage Products
-      </h1>
+    <div style={{ minHeight: "100vh", backgroundColor: "hsl(var(--bg-primary))" }}>
+      <AdminHeader />
 
-      <form
-        onSubmit={handleAddProduct}
-        style={{
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "8px",
-          padding: "30px",
-          boxShadow: "var(--shadow)",
-          marginBottom: "40px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "16px",
-        }}
-      >
-        <h3 style={{ fontFamily: "var(--heading)", fontSize: "22px", color: "var(--accent)", margin: "0 0 10px", borderBottom: "1px solid var(--border)", paddingBottom: "8px" }}>
-          Add New Product
-        </h3>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-          <input
-            name="name"
-            placeholder="Product Name"
-            value={formData.name}
-            onChange={handleChange}
-            required
-            style={{ width: "100%", boxSizing: "border-box" }}
-          />
-
-          <input
-            name="category"
-            placeholder="Category"
-            value={formData.category}
-            onChange={handleChange}
-            required
-            style={{ width: "100%", boxSizing: "border-box" }}
-          />
+      <div className="container" style={{ maxWidth: "1100px", paddingBottom: "6rem" }}>
+        <div style={{ marginBottom: "2.5rem" }}>
+          <h1 style={{ fontSize: "2.2rem", fontWeight: 800, fontFamily: "var(--font-display)", textTransform: "uppercase", margin: 0 }}>
+            Inventory Management
+          </h1>
+          <p style={{ color: "hsl(var(--text-secondary))", margin: "6px 0 0", fontSize: "0.95rem" }}>
+            Add new products or modify existing stock listings.
+          </p>
         </div>
 
-        <input
-          name="description"
-          placeholder="Description"
-          value={formData.description}
-          onChange={handleChange}
-          required
-          style={{ width: "100%", boxSizing: "border-box" }}
-        />
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-          <input
-            name="price"
-            placeholder="Price (₹)"
-            value={formData.price}
-            onChange={handleChange}
-            required
-            style={{ width: "100%", boxSizing: "border-box" }}
-          />
-
-          <input
-            name="stock"
-            placeholder="Stock Quantity"
-            value={formData.stock}
-            onChange={handleChange}
-            required
-            style={{ width: "100%", boxSizing: "border-box" }}
-          />
-        </div>
-
-        <input
-          name="image"
-          placeholder="Image URL"
-          value={formData.image}
-          onChange={handleChange}
-          style={{ width: "100%", boxSizing: "border-box" }}
-        />
-
-        <button type="submit" style={{ padding: "12px", width: "200px", alignSelf: "flex-start", marginTop: "10px" }}>
-          Add Product
-        </button>
-      </form>
-
-      <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "40px 0" }} />
-
-      <h2 style={{ fontFamily: "var(--heading)", fontSize: "32px", color: "var(--text-h)", marginBottom: "24px" }}>
-        All Products
-      </h2>
-
-      {products.map((product) => (
         <div
-          key={product._id}
           style={{
-            backgroundColor: "var(--card-bg)",
-            border: "1px solid var(--border)",
-            padding: "24px",
-            marginBottom: "20px",
-            borderRadius: "8px",
-            boxShadow: "var(--shadow)",
-            display: "flex",
-            gap: "24px",
-            alignItems: "center",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "3rem",
+            alignItems: "start",
           }}
         >
-          {product.image && (
-            <img
-              src={product.image}
-              alt={product.name}
+          {/* Left Column: Form Card */}
+          <div
+            style={{
+              border: "1.5px solid hsl(var(--text-primary))",
+              backgroundColor: "hsl(var(--bg-card))",
+              padding: "1.5rem",
+            }}
+          >
+            <h3
               style={{
-                width: "120px",
-                height: "120px",
-                objectFit: "cover",
-                borderRadius: "4px",
-                border: "1px solid var(--border)",
+                fontSize: "1.2rem",
+                fontWeight: 800,
+                fontFamily: "var(--font-display)",
+                marginBottom: "1.5rem",
+                textTransform: "uppercase",
+                borderBottom: "1px solid hsl(var(--border))",
+                paddingBottom: "0.5rem",
               }}
-            />
-          )}
+            >
+              {editingId ? "Edit Product Details" : "Create New Product"}
+            </h3>
 
-          <div style={{ flex: 1 }}>
-            {editingId === product._id ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <input
-                  value={editData.name}
-                  onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                  style={{ width: "100%", boxSizing: "border-box" }}
-                />
-                <input
-                  value={editData.description}
-                  onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                  style={{ width: "100%", boxSizing: "border-box" }}
-                />
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+            {editingId ? (
+              // EDIT FORM
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div className="form-group">
+                  <label className="form-label">Product Name *</label>
                   <input
+                    className="form-input"
+                    value={editData.name}
+                    onChange={(e) => setEditData({ ...editData, name: e.target.value })}
+                    placeholder="Enter product name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    className="form-input"
+                    value={editData.description}
+                    onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                    placeholder="Enter product description"
+                    style={{ minHeight: "80px", resize: "vertical", lineHeight: "1.4" }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Price (₹) *</label>
+                  <input
+                    className="form-input"
+                    type="number"
                     value={editData.price}
                     onChange={(e) => setEditData({ ...editData, price: e.target.value })}
-                    placeholder="Price"
-                    style={{ width: "100%", boxSizing: "border-box" }}
+                    placeholder="0.00"
                   />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Image URL</label>
                   <input
+                    className="form-input"
+                    value={editData.image}
+                    onChange={(e) => setEditData({ ...editData, image: e.target.value })}
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select
+                    className="form-input"
                     value={editData.category}
                     onChange={(e) => setEditData({ ...editData, category: e.target.value })}
-                    placeholder="Category"
-                    style={{ width: "100%", boxSizing: "border-box" }}
-                  />
+                    style={{ cursor: "pointer" }}
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Stock Units *</label>
                   <input
+                    className="form-input"
+                    type="number"
                     value={editData.stock}
                     onChange={(e) => setEditData({ ...editData, stock: e.target.value })}
-                    placeholder="Stock"
-                    style={{ width: "100%", boxSizing: "border-box" }}
+                    placeholder="0"
                   />
                 </div>
-                <button onClick={saveProduct} style={{ padding: "10px 20px", width: "160px", marginTop: "5px" }}>
-                  Save Changes
-                </button>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                  <button className="btn btn-primary" style={{ flex: 1 }} onClick={saveProduct}>
+                    Save updates
+                  </button>
+                  <button className="btn btn-secondary" onClick={cancelEdit}>
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
-              <>
-                <h3 style={{ margin: "0 0 6px", fontFamily: "var(--heading)", fontSize: "22px", color: "var(--text-h)" }}>
-                  {product.name}
-                </h3>
-
-                <p style={{ margin: "0 0 10px", color: "var(--text)", fontSize: "14px", opacity: 0.8 }}>
-                  {product.description}
-                </p>
-
-                <div style={{ display: "flex", gap: "20px", marginBottom: "12px", fontSize: "13px", color: "var(--stone-taupe)" }}>
-                  <span>
-                    <strong>Category:</strong> {Array.isArray(product.category) ? product.category.join(", ") : product.category}
-                  </span>
-                  <span>
-                    <strong>Stock:</strong> {product.stock}
-                  </span>
+              // ADD FORM
+              <form onSubmit={handleAddProduct} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div className="form-group">
+                  <label className="form-label">Product Name *</label>
+                  <input
+                    className="form-input"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleChange}
+                    placeholder="Enter product name"
+                  />
                 </div>
 
-                {product.stock === 0 ? (
-                  <p style={{ color: "#E28B8B", fontSize: "13px", fontWeight: "600", margin: "0 0 12px" }}>
-                    ❌ Out of Stock
-                  </p>
-                ) : product.stock < 5 ? (
-                  <p style={{ color: "var(--olive-gold)", fontSize: "13px", fontWeight: "600", margin: "0 0 12px" }}>
-                    ⚠ Low Stock
-                  </p>
-                ) : null}
-
-                <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-                  <h3 style={{ margin: 0, color: "var(--accent)", fontSize: "20px", fontFamily: "var(--heading)" }}>
-                    ₹{product.price}
-                  </h3>
-                  <div>
-                    <button
-                      onClick={() => editProduct(product)}
-                      style={{ padding: "8px 18px", fontSize: "12px" }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => deleteProduct(product._id)}
-                      style={{
-                        marginLeft: "10px",
-                        padding: "8px 18px",
-                        fontSize: "12px",
-                        backgroundColor: "transparent",
-                        color: "var(--text-h)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Description</label>
+                  <textarea
+                    className="form-input"
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    placeholder="Enter product description"
+                    style={{ minHeight: "80px", resize: "vertical", lineHeight: "1.4" }}
+                  />
                 </div>
-              </>
+
+                <div className="form-group">
+                  <label className="form-label">Price (₹) *</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Image URL</label>
+                  <input
+                    className="form-input"
+                    name="image"
+                    value={formData.image}
+                    onChange={handleChange}
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Category</label>
+                  <select
+                    className="form-input"
+                    name="category"
+                    value={formData.category}
+                    onChange={handleChange}
+                    style={{ cursor: "pointer" }}
+                  >
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Stock Units *</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    name="stock"
+                    value={formData.stock}
+                    onChange={handleChange}
+                    placeholder="0"
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ marginTop: "10px" }}>
+                  Add Product
+                </button>
+              </form>
             )}
           </div>
+
+          {/* Right Column: Inventory List */}
+          <div>
+            <h3
+              style={{
+                fontSize: "1.1rem",
+                fontWeight: 800,
+                fontFamily: "var(--font-display)",
+                marginBottom: "1.5rem",
+                textTransform: "uppercase",
+              }}
+            >
+              Active Catalog ({products.length})
+            </h3>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {products.map((product) => {
+                const stockVal = Number(product.stock);
+                const isOutOfStock = stockVal === 0;
+                const isLowStock = stockVal > 0 && stockVal < 5;
+
+                return (
+                  <div
+                    key={product._id}
+                    style={{
+                      display: "flex",
+                      gap: "1rem",
+                      padding: "1rem",
+                      alignItems: "center",
+                      border: "1.5px solid hsl(var(--text-primary))",
+                      backgroundColor: "hsl(var(--bg-card))",
+                      opacity: editingId && editingId !== product._id ? 0.6 : 1,
+                    }}
+                  >
+                    {/* Thumbnail Image */}
+                    <div
+                      style={{
+                        width: "80px",
+                        height: "80px",
+                        backgroundColor: "hsl(var(--bg-secondary))",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden",
+                        border: "1px solid hsl(var(--border))",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {product.image ? (
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      )}
+                    </div>
+
+                    {/* Details */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <h4
+                          style={{
+                            fontSize: "1.1rem",
+                            fontWeight: 800,
+                            fontFamily: "var(--font-display)",
+                            margin: 0,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {product.name}
+                        </h4>
+                        <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                          <button
+                            onClick={() => editProduct(product)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: "6px" }}
+                            title="Edit"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <path d="M12 20h9M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => deleteProduct(product._id)}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: "6px", color: "hsl(var(--danger))" }}
+                            title="Delete"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <p
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "hsl(var(--text-secondary))",
+                          margin: "4px 0",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 1,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        {product.description || "No description provided."}
+                      </p>
+
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                        <span style={{ fontSize: "1rem", fontWeight: 700, color: "hsl(var(--text-primary))" }}>
+                          ₹{Number(product.price).toLocaleString("en-IN")}.00
+                        </span>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "hsl(var(--text-secondary))" }}>
+                            Qty: {product.stock}
+                          </span>
+                          {isOutOfStock ? (
+                            <span
+                              style={{
+                                border: "1px solid hsl(var(--danger))",
+                                color: "hsl(var(--danger))",
+                                padding: "1px 6px",
+                                fontSize: "0.6rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              [ OUT OF STOCK ]
+                            </span>
+                          ) : isLowStock ? (
+                            <span
+                              style={{
+                                border: "1px solid hsl(var(--accent))",
+                                color: "hsl(var(--accent))",
+                                padding: "1px 6px",
+                                fontSize: "0.6rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              [ LOW STOCK ]
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                border: "1px solid hsl(var(--success))",
+                                color: "hsl(var(--success))",
+                                padding: "1px 6px",
+                                fontSize: "0.6rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              [ IN STOCK ]
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      ))}
+      </div>
     </div>
   );
 }

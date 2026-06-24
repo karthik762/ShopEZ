@@ -22,7 +22,7 @@ const productSchema = new mongoose.Schema(
     },
 
     category: {
-      type: mongoose.Schema.Types.Mixed
+      type: String
     },
 
     stock: {

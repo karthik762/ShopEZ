@@ -2,6 +2,11 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const { rateLimit } = require("express-rate-limit");
+const logger = require("./logger");
+
 const authRoutes = require("./routes/authRoutes");
 const productRoutes = require("./routes/productRoutes");
 const cartRoutes = require("./routes/cartRoutes");
@@ -9,17 +14,36 @@ const orderRoutes = require("./routes/orderRoutes");
 
 dotenv.config();
 
-console.log("DEBUG: MONGO_URI env variable exists:", !!process.env.MONGO_URI);
+logger.info(`MONGO_URI env variable exists: ${!!process.env.MONGO_URI}`);
 if (process.env.MONGO_URI) {
-  console.log("DEBUG: MONGO_URI starts with:", process.env.MONGO_URI.substring(0, 20));
+  logger.info(`MONGO_URI starts with: ${process.env.MONGO_URI.substring(0, 20)}`);
 } else {
-  console.log("DEBUG: MONGO_URI is UNDEFINED!");
+  logger.warn("MONGO_URI is UNDEFINED!");
 }
 
 const app = express();
 
+app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+const morganFormat = process.env.NODE_ENV === "production" ? "combined" : "dev";
+app.use(morgan(morganFormat, {
+  stream: {
+    write: (message) => logger.info(message.trim())
+  }
+}));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    message: "Too many requests from this IP, please try again after 15 minutes."
+  }
+});
+app.use(limiter);
 
 // Database connection middleware for Serverless environment
 const connectDB = async (req, res, next) => {
@@ -28,12 +52,12 @@ const connectDB = async (req, res, next) => {
   }
   try {
     const mongoURI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/shopez";
-    console.log("Connecting to MongoDB Atlas...");
+    logger.info("Connecting to MongoDB Atlas...");
     await mongoose.connect(mongoURI);
-    console.log("MongoDB Connected successfully");
+    logger.info("MongoDB Connected successfully");
     next();
   } catch (err) {
-    console.error("Database connection error:", err);
+    logger.error("Database connection error: " + err.message, { error: err });
     res.status(500).json({
       message: "Database connection failed",
       error: err.message
@@ -57,7 +81,7 @@ app.use("/api/orders", orderRoutes);
 if (process.env.NODE_ENV !== "production") {
   const port = process.env.PORT || 5005;
   app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    logger.info(`Server running on port ${port}`);
   });
 }
 

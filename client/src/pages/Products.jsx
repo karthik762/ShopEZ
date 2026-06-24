@@ -12,34 +12,35 @@ function Products() {
     useState("All");
   const [sortOption, setSortOption] =
     useState("default");
-  const [userOrders, setUserOrders] = useState([]);
+  const [displayRecommendations, setDisplayRecommendations] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchProducts();
     const storedUser = localStorage.getItem("user");
+    let userId = null;
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
         if (user && user.usertype !== "Admin") {
-          fetchUserOrders(user._id);
+          userId = user._id;
         }
       } catch (e) {
         console.log(e);
       }
     }
+    fetchRecommendations(userId);
   }, []);
 
-  const fetchUserOrders = async (userId) => {
+  const fetchRecommendations = async (userId) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(
-        `${API_URL}/api/orders/${userId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setUserOrders(res.data);
+      const url = userId
+        ? `${API_URL}/api/products/recommendations/${userId}`
+        : `${API_URL}/api/products/recommendations`;
+      const res = await axios.get(url);
+      setDisplayRecommendations(res.data);
     } catch (err) {
-      console.log("Error fetching orders for recommendations:", err);
+      console.log("Error fetching recommendations:", err);
     }
   };
 
@@ -158,142 +159,6 @@ function Products() {
       window.showToast("Failed To Add Product", "error");
     }
   };
-
-  const getRecommendations = () => {
-    if (!products || products.length === 0) return [];
-
-    
-    if (userOrders && userOrders.length > 0) {
-      
-      let highestOrder = userOrders[0];
-      userOrders.forEach((o) => {
-        if (o.totalAmount > highestOrder.totalAmount) {
-          highestOrder = o;
-        }
-      });
-
-      
-      const categoriesInHighestOrder = new Set();
-      highestOrder.products.forEach((item) => {
-        if (item.productId && item.productId.category) {
-          const cat = item.productId.category;
-          if (Array.isArray(cat)) {
-            cat.forEach(c => categoriesInHighestOrder.add(c));
-          } else {
-            categoriesInHighestOrder.add(cat);
-          }
-        }
-      });
-
-      
-      const categoryCounts = {};
-      const productCounts = {}; 
-      
-      userOrders.forEach((order) => {
-        order.products.forEach((item) => {
-          if (item.productId) {
-            const cat = item.productId.category;
-            const prodId = item.productId._id;
-            
-            if (cat) {
-              if (Array.isArray(cat)) {
-                cat.forEach(c => {
-                  categoryCounts[c] = (categoryCounts[c] || 0) + item.quantity;
-                });
-              } else {
-                categoryCounts[cat] = (categoryCounts[cat] || 0) + item.quantity;
-              }
-            }
-            productCounts[prodId] = (productCounts[prodId] || 0) + item.quantity;
-          }
-        });
-      });
-
-      let favoriteCategory = null;
-      let maxCatCount = 0;
-      Object.keys(categoryCounts).forEach((cat) => {
-        if (categoryCounts[cat] > maxCatCount) {
-          maxCatCount = categoryCounts[cat];
-          favoriteCategory = cat;
-        }
-      });
-
-      let favoriteProductId = null;
-      let maxProdCount = 0;
-      Object.keys(productCounts).forEach((prodId) => {
-        if (productCounts[prodId] > maxProdCount) {
-          maxProdCount = productCounts[prodId];
-          favoriteProductId = prodId;
-        }
-      });
-
-      let recs = [];
-
-      
-      if (favoriteProductId) {
-        const favProduct = products.find((p) => p._id === favoriteProductId && p.stock > 0);
-        if (favProduct) {
-          recs.push({ product: favProduct, reason: "Your Most Ordered Item" });
-        }
-      }
-
-      
-      const preferredCategories = new Set(categoriesInHighestOrder);
-      if (favoriteCategory) preferredCategories.add(favoriteCategory);
-
-      const categoryProducts = products.filter((p) => {
-        if (!p.category) return false;
-        const pCats = Array.isArray(p.category) ? p.category : [p.category];
-        const matchesCategory = pCats.some(c => preferredCategories.has(c));
-        return matchesCategory && 
-               p.stock > 0 && 
-               p._id !== favoriteProductId;
-      });
-
-      
-      categoryProducts.sort((a, b) => new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id));
-
-      categoryProducts.forEach((p) => {
-        if (!p.category) return;
-        const pCats = Array.isArray(p.category) ? p.category : [p.category];
-        const matchedHighestOrderCat = pCats.find(c => categoriesInHighestOrder.has(c));
-        const matchedFavCat = pCats.find(c => c === favoriteCategory);
-        const displayCat = matchedHighestOrderCat || matchedFavCat || pCats[0];
-
-        const reason = matchedHighestOrderCat
-          ? `Based on highest order (${displayCat})`
-          : `Matches favorite category (${displayCat})`;
-        recs.push({ product: p, reason });
-      });
-
-      
-      const uniqueRecs = [];
-      const seenIds = new Set();
-      recs.forEach((r) => {
-        if (!seenIds.has(r.product._id)) {
-          seenIds.add(r.product._id);
-          uniqueRecs.push(r);
-        }
-      });
-
-      if (uniqueRecs.length >= 2) {
-        return uniqueRecs.slice(0, 3);
-      }
-    }
-
-    
-    const sortedProducts = [...products];
-    sortedProducts.sort((a, b) => {
-      return new Date(b.createdAt || b._id) - new Date(a.createdAt || a._id);
-    });
-
-    return sortedProducts.slice(0, 3).map((p) => ({
-      product: p,
-      reason: "New Arrival"
-    }));
-  };
-
-  const displayRecommendations = getRecommendations();
 
   return (
     <div style={{ padding: "40px 20px" }}>

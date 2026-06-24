@@ -5,13 +5,16 @@ const {
   addProduct,
   getProducts,
   deleteProduct,
-  updateProduct
+  updateProduct,
+  getRecommendations
 } = require("../controllers/productController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const adminMiddleware = require("../middleware/adminMiddleware");
 
 router.get("/", getProducts);
+router.get("/recommendations", getRecommendations);
+router.get("/recommendations/:userId", getRecommendations);
 
 router.post(
   "/",
